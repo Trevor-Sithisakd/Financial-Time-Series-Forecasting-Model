@@ -1,6 +1,7 @@
 import warnings
 warnings.filterwarnings("ignore")
 
+import os
 import pandas as pd
 import yfinance as yf
 
@@ -8,6 +9,21 @@ from config import TICKERS, START_DATE, END_DATE, FORWARD_DAYS, MIN_TRAIN_YRS, M
 from features import build_features
 from validation import walk_forward
 from reporting import print_ticker_results, print_aggregate_summary, print_feature_importance
+
+CACHE_DIR   = "./cache"
+PRICES_FILE = os.path.join(CACHE_DIR, f"prices_{START_DATE}_{END_DATE}.csv")
+
+
+def load_prices() -> pd.DataFrame:
+    if os.path.exists(PRICES_FILE):
+        print(f"Loading cached prices from {PRICES_FILE}...")
+        return pd.read_csv(PRICES_FILE, header=[0, 1], index_col=0, parse_dates=True)
+    print(f"Downloading OHLCV data for {TICKERS} ({START_DATE} to {END_DATE})...")
+    raw = yf.download(TICKERS, start=START_DATE, end=END_DATE, auto_adjust=True, progress=False)
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    raw.to_csv(PRICES_FILE)
+    print(f"Cached to {PRICES_FILE}")
+    return raw
 
 
 def fetch_earnings_dates(ticker: str) -> pd.DatetimeIndex:
@@ -20,8 +36,7 @@ def fetch_earnings_dates(ticker: str) -> pd.DatetimeIndex:
 
 
 def main():
-    print(f"Downloading OHLCV data for {TICKERS} ({START_DATE} to {END_DATE})...")
-    raw = yf.download(TICKERS, start=START_DATE, end=END_DATE, auto_adjust=True, progress=False)
+    raw = load_prices()
 
     all_results     = []
     all_importances = {}
