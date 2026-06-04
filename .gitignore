@@ -1,3 +1,4 @@
 transcripts_raw/
 transcripts_clean/
 cache/
+__pycache__/
