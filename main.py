@@ -10,7 +10,7 @@ from config import (
     TICKERS, START_DATE, END_DATE,
     FORWARD_DAYS, MIN_TRAIN_YRS, MLFLOW_EXPERIMENT,
 )
-from features import build_features
+from features import build_features, add_cross_sectional_features
 from validation import walk_forward
 from evaluation import compute_metrics
 from reporting import (
@@ -26,6 +26,7 @@ import models.xgboost_model as active_model
 CACHE_DIR   = "./cache"
 PRICES_FILE = os.path.join(CACHE_DIR, f"prices_{START_DATE}_{END_DATE}.csv")
 SPY_FILE    = os.path.join(CACHE_DIR, f"spy_{START_DATE}_{END_DATE}.csv")
+MACRO_FILE  = os.path.join(CACHE_DIR, f"macro_{START_DATE}_{END_DATE}.csv")
 
 
 def load_prices() -> pd.DataFrame:
@@ -55,6 +56,66 @@ def load_spy() -> pd.Series:
     return close
 
 
+def _extract_close(raw, ticker_symbol: str) -> pd.Series:
+    """Helper to pull a single close series from a yfinance multi or single download."""
+    if isinstance(raw.columns, pd.MultiIndex):
+        close = raw["Close"][ticker_symbol]
+    else:
+        close = raw["Close"]
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
+    return close.rename(ticker_symbol)
+
+
+def load_macro_data(spy_close: pd.Series) -> pd.DataFrame:
+    """
+    Build a date-indexed macro feature DataFrame from VIX and Treasury yields.
+    Cached after first download.
+
+    Features:
+      vix_level          : raw VIX — absolute fear level
+      vix_5d_chg         : 5-day % change in VIX — direction of fear
+      spy_ret_5d         : SPY 5-day return — near-term market trend
+      spy_ret_20d        : SPY 20-day return — medium-term market trend
+      spy_vol_20d        : SPY 20-day realised vol — market volatility regime
+      yield_curve        : 10yr Treasury yield minus 3mo yield (slope)
+      yield_curve_20d_chg: 20-day change in yield curve — steepening vs flattening
+    """
+    if os.path.exists(MACRO_FILE):
+        df = pd.read_csv(MACRO_FILE, index_col=0, parse_dates=True)
+        print(f"Loading cached macro data from {MACRO_FILE}...")
+        return df.sort_index()
+
+    print("Downloading macro data (VIX, 10yr yield, 3mo yield)...")
+    vix_raw = yf.download("^VIX", start=START_DATE, end=END_DATE, auto_adjust=False, progress=False)
+    tnx_raw = yf.download("^TNX", start=START_DATE, end=END_DATE, auto_adjust=False, progress=False)
+    irx_raw = yf.download("^IRX", start=START_DATE, end=END_DATE, auto_adjust=False, progress=False)
+
+    vix = _extract_close(vix_raw, "^VIX").rename("vix")
+    tnx = _extract_close(tnx_raw, "^TNX").rename("tnx")
+    irx = _extract_close(irx_raw, "^IRX").rename("irx")
+
+    idx   = spy_close.index
+    vix   = vix.reindex(idx, method="ffill")
+    tnx   = tnx.reindex(idx, method="ffill")
+    irx   = irx.reindex(idx, method="ffill")
+    spy_r = spy_close.pct_change()
+
+    macro = pd.DataFrame(index=idx)
+    macro["vix_level"]           = vix
+    macro["vix_5d_chg"]          = vix.pct_change(5)
+    macro["spy_ret_5d"]          = spy_r.rolling(5).sum()
+    macro["spy_ret_20d"]         = spy_r.rolling(20).sum()
+    macro["spy_vol_20d"]         = spy_r.rolling(20).std()
+    macro["yield_curve"]         = tnx - irx
+    macro["yield_curve_20d_chg"] = macro["yield_curve"].diff(20)
+
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    macro.to_csv(MACRO_FILE)
+    print(f"Cached to {MACRO_FILE}")
+    return macro.sort_index()
+
+
 def fetch_earnings_dates(ticker: str) -> pd.DatetimeIndex:
     try:
         ed_raw = yf.Ticker(ticker).earnings_dates
@@ -65,11 +126,6 @@ def fetch_earnings_dates(ticker: str) -> pd.DatetimeIndex:
 
 
 def fetch_earnings_surprise(ticker: str) -> pd.Series:
-    """
-    Returns a date-indexed Series of normalised earnings surprise values.
-    surprise = (Reported EPS - EPS Estimate) / abs(EPS Estimate)
-    Only populated where yfinance has both estimate and reported figures.
-    """
     try:
         ed = yf.Ticker(ticker).earnings_dates
         if ed is None or ed.empty:
@@ -84,8 +140,6 @@ def fetch_earnings_surprise(ticker: str) -> pd.Series:
         if hasattr(idx, "tz") and idx.tz is not None:
             idx = idx.tz_localize(None)
         surprise.index = idx
-        n = len(surprise)
-        print(f"    earnings surprise: {n} quarters of data available")
         return surprise.sort_index().rename("earnings_surprise")
     except Exception:
         return pd.Series(dtype=float, name="earnings_surprise")
@@ -94,36 +148,55 @@ def fetch_earnings_surprise(ticker: str) -> pd.Series:
 def main():
     mlflow.set_experiment(MLFLOW_EXPERIMENT)
 
-    with mlflow.start_run(run_name=f"{active_model.MODEL_NAME} + earnings surprise"):
+    with mlflow.start_run(run_name=f"{active_model.MODEL_NAME} + macro + cross-sectional"):
         mlflow.log_params({
-            "model"          : active_model.MODEL_NAME,
-            "tickers"        : ",".join(TICKERS),
-            "start_date"     : START_DATE,
-            "end_date"       : END_DATE,
-            "forward_days"   : FORWARD_DAYS,
-            "min_train_yrs"  : MIN_TRAIN_YRS,
-            "target"         : "excess_return_over_SPY",
-            "new_features"   : "macd,bollinger,atr_norm,earnings_surprise",
+            "model"         : active_model.MODEL_NAME,
+            "tickers"       : ",".join(TICKERS),
+            "start_date"    : START_DATE,
+            "end_date"      : END_DATE,
+            "forward_days"  : FORWARD_DAYS,
+            "min_train_yrs" : MIN_TRAIN_YRS,
+            "target"        : "excess_return_over_SPY",
+            "new_features"  : "macro(vix,yields,spy_momentum),cross_sectional_ranks,peer_excess_ret",
         })
 
-        raw       = load_prices()
-        spy_close = load_spy()
+        raw        = load_prices()
+        spy_close  = load_spy()
+        macro_data = load_macro_data(spy_close)
 
+        # ── Phase 1: build base features for every ticker ─────────────────────
+        all_feat_dfs     = {}
+        all_earn_dates   = {}
+        all_earn_surp    = {}
+
+        for ticker in TICKERS:
+            prices            = raw.xs(ticker, level=1, axis=1)[["Close", "High", "Low", "Volume"]].dropna()
+            earn_dates        = fetch_earnings_dates(ticker)
+            earn_surp         = fetch_earnings_surprise(ticker)
+            all_earn_dates[ticker] = earn_dates
+            all_earn_surp[ticker]  = earn_surp
+
+            feat_df = build_features(
+                prices, earn_dates, FORWARD_DAYS,
+                benchmark_close=spy_close,
+                earnings_surprise=earn_surp,
+                macro_data=macro_data,
+            )
+            all_feat_dfs[ticker] = feat_df
+            print(f"  {ticker}: {feat_df.shape[0]} rows x {feat_df.shape[1]} columns (pre cross-sectional)")
+
+        # ── Phase 2: add cross-sectional ranks across all tickers ─────────────
+        all_feat_dfs = add_cross_sectional_features(all_feat_dfs)
+        print(f"\n  Cross-sectional features added. "
+              f"Final feature count: {all_feat_dfs[TICKERS[0]].shape[1]} columns\n")
+
+        # ── Phase 3: walk-forward validation ──────────────────────────────────
         all_results     = []
         all_importances = {}
         all_preds       = []
 
         for ticker in TICKERS:
-            prices = raw.xs(ticker, level=1, axis=1)[
-                ["Close", "High", "Low", "Volume"]
-            ].dropna()
-            earnings_dates   = fetch_earnings_dates(ticker)
-            earnings_surprise = fetch_earnings_surprise(ticker)
-            feat_df = build_features(
-                prices, earnings_dates, FORWARD_DAYS,
-                benchmark_close=spy_close,
-                earnings_surprise=earnings_surprise,
-            )
+            feat_df = all_feat_dfs[ticker]
 
             results, pred_df, model, feature_cols = walk_forward(
                 feat_df, MIN_TRAIN_YRS, active_model.build

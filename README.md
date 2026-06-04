@@ -12,6 +12,7 @@ XGBoost and linear regression pipeline for predicting 5-day forward returns on l
 | 4 | XGBoost | Base + MACD/BB/ATR | Excess vs SPY | -0.041 | -0.041 | 0.486 | +0.10% | 0.16 |
 | 5 | Linear Regression (Ridge) | Base + MACD/BB/ATR + Earnings Surprise | Excess vs SPY | -0.026 | -0.026 | 0.501 | +0.32% | 0.50 |
 | 6 | XGBoost | Base + MACD/BB/ATR + Earnings Surprise | Excess vs SPY | -0.043 | -0.043 | 0.486 | +0.14% | 0.22 |
+| **7** | **Linear Regression (Ridge)** | **+ Macro (VIX, yields) + Cross-sectional ranks** | **Excess vs SPY** | **+0.005** | **+0.005** | **0.502** | **+0.55%** | **0.759** |
 
 **Thresholds:** IC > 0.05 and Sharpe > 1.0 indicate a meaningful signal.
 
@@ -19,9 +20,11 @@ XGBoost and linear regression pipeline for predicting 5-day forward returns on l
 
 **Rows 2→3 (Raw target → Excess return):** Switching to SPY-excess target improved IC (-0.049 → -0.028) and collapsed fake directional accuracy (0.542 → 0.498). *Excess return target removes the dominant noise source — market beta — making the task harder but more honest.*
 
-**Rows 3→4 (Linear vs XGBoost, excess target):** XGBoost degraded significantly (Sharpe 0.61 → 0.16). With a harder, less noisy target Ridge's regularisation generalises better than XGBoost which overfits. MACD signal became the top feature in XGBoost, replacing volatility. *On small datasets with weak signal, simpler models outperform complex ones.*
+**Rows 3→4 (Linear vs XGBoost, excess target):** XGBoost degraded significantly (Sharpe 0.61 → 0.16). With a harder, less noisy target Ridge's regularisation generalises better than XGBoost which overfits. *On small datasets with weak signal, simpler models outperform complex ones.*
 
-**Rows 3→5 and 4→6 (Adding earnings surprise):** Only 12 quarters of yfinance surprise data available (3 years vs 7-year window). IC improved marginally (-0.028 → -0.026 for linear). Sharpe was unchanged or slightly lower — the feature fires too rarely to materially shift aggregate metrics. *Earnings surprise is the right feature but needs full historical point-in-time data (paid API) to show its true impact. The infrastructure is in place.*
+**Rows 3→5 and 4→6 (Adding earnings surprise):** Only 12 quarters of yfinance surprise data available vs 7-year window. Marginal IC improvement, Sharpe unchanged. *Feature fires too rarely to shift aggregate metrics — needs full point-in-time historical data.*
+
+**Row 5→7 (Adding macro + cross-sectional features): IC crossed zero for the first time (+0.005).** Sharpe improved from 0.50 → 0.759, top-decile return from +0.32% → +0.55%. VIX gives the model regime awareness (momentum signals behave differently in fear vs calm markets). Yield curve slope captures macro headwinds for growth stocks. Cross-sectional momentum and RSI ranks let the model identify which stock is strongest *relative to peers*, not just in absolute terms. *IC still below 0.05 threshold — direction of travel is positive, more data and full earnings surprise history are the next lever.*
 
 ## Session Log
 

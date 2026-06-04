@@ -43,12 +43,53 @@ def compute_atr(
     return tr.rolling(window).mean()
 
 
+def add_cross_sectional_features(feat_dict: dict) -> dict:
+    """
+    Add cross-sectional rank and peer-relative features to each ticker's DataFrame.
+    Must be called after all tickers have been processed by build_features so their
+    feature columns are comparable on the same dates.
+
+    Features added per ticker:
+      xs_{col}_rank      : percentile rank (0=worst, 1=best) of that feature
+                           among all tickers on each date
+      xs_peer_excess_ret : 5-day return of this ticker minus the average of peers
+    """
+    tickers  = list(feat_dict.keys())
+    rank_cols = ["momentum_20d", "momentum_60d", "rsi_14", "vol_20d"]
+
+    for col in rank_cols:
+        # Build date x ticker matrix; pandas aligns on index automatically
+        combined = pd.DataFrame({
+            t: feat_dict[t][col]
+            for t in tickers
+            if col in feat_dict[t].columns
+        })
+        ranked = combined.rank(axis=1, pct=True)
+        for ticker in tickers:
+            if ticker in ranked.columns:
+                feat_dict[ticker][f"xs_{col}_rank"] = ranked[ticker]
+
+    # Peer excess return: how did this ticker do vs the average of the other 4?
+    ret_5d = pd.DataFrame({
+        t: feat_dict[t]["momentum_5d"]
+        for t in tickers
+        if "momentum_5d" in feat_dict[t].columns
+    })
+    peer_avg = ret_5d.mean(axis=1)
+    for ticker in tickers:
+        if ticker in ret_5d.columns:
+            feat_dict[ticker]["xs_peer_excess_ret"] = ret_5d[ticker] - peer_avg
+
+    return feat_dict
+
+
 def build_features(
     prices: pd.DataFrame,
     earnings_dates: pd.DatetimeIndex,
     forward_days: int,
     benchmark_close: pd.Series = None,
     earnings_surprise: pd.Series = None,
+    macro_data: pd.DataFrame = None,
 ) -> pd.DataFrame:
     """
     Build a feature matrix from a single-ticker OHLCV DataFrame.
@@ -56,10 +97,10 @@ def build_features(
     The 'target' column is the label — drop from X before training.
 
     Args:
-        benchmark_close   : SPY close — if provided, target becomes excess return over SPY.
-        earnings_surprise : Date-indexed surprise values (actual - estimate) / |estimate|.
-                            Applied from the day after the announcement (after-close event)
-                            for a 5-trading-day PEAD window.
+        benchmark_close   : SPY close — target becomes excess return over SPY.
+        earnings_surprise : Date-indexed surprise values; applied over 5-day PEAD window.
+        macro_data        : Date-indexed macro features (VIX, yields, SPY momentum).
+                            Lagged 1 day inside this function.
     """
     close  = prices["Close"]
     volume = prices["Volume"]
@@ -102,27 +143,33 @@ def build_features(
         atr = compute_atr(prices["High"].shift(1), prices["Low"].shift(1), lagged)
         feat["atr_norm_ret"] = ret.shift(1) / atr.replace(0, np.nan)
 
+    # Macro features — lagged 1 day so yesterday's macro is used at prediction time.
+    # VIX tells the model what fear regime it's operating in.
+    # Yield curve tells the model the macro headwind/tailwind for growth stocks.
+    # SPY momentum tells the model whether the broad market is trending.
+    if macro_data is not None:
+        macro = macro_data.reindex(prices.index, method="ffill").shift(1)
+        for col in macro.columns:
+            feat[col] = macro[col]
+
     # Earnings features
-    # Earnings are announced after market close, so the surprise is tradeable
-    # from the next trading day. PEAD window = ~5 trading days post-announcement.
     feat["earnings_surprise"] = 0.0
     feat["earnings_event"]    = 0
 
     if earnings_surprise is not None and not earnings_surprise.empty:
         for date, surprise_val in earnings_surprise.items():
             pead_start = date + pd.Timedelta(days=1)
-            pead_end   = date + pd.Timedelta(days=8)  # ~5 trading days
+            pead_end   = date + pd.Timedelta(days=8)
             mask = (feat.index >= pead_start) & (feat.index <= pead_end)
             feat.loc[mask, "earnings_surprise"] = float(surprise_val)
             feat.loc[mask, "earnings_event"]    = 1
     elif earnings_dates is not None and len(earnings_dates) > 0:
-        # Fallback binary flag when no surprise data is available
         for ed in earnings_dates:
             mask = (feat.index >= ed - pd.Timedelta(days=1)) & \
                    (feat.index <= ed + pd.Timedelta(days=1))
             feat.loc[mask, "earnings_event"] = 1
 
-    # Target: excess return over benchmark if provided, otherwise raw forward return
+    # Target: excess return over benchmark, or raw forward return
     raw_fwd = close.shift(-forward_days) / close - 1
     if benchmark_close is not None:
         bench     = benchmark_close.sort_index().reindex(close.index, method="ffill")
