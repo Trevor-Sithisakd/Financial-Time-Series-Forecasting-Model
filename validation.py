@@ -1,22 +1,27 @@
 import numpy as np
 import pandas as pd
-from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
+from typing import Callable
 
 
 def walk_forward(
     feat_df: pd.DataFrame,
     min_train_yrs: int,
-    model_params: dict,
-) -> tuple[pd.DataFrame, pd.DataFrame, XGBRegressor, list[str]]:
+    model_factory: Callable,
+) -> tuple[pd.DataFrame, pd.DataFrame, object, list[str]]:
     """
     Expanding-window walk-forward validation.
     Trains on all data up to year Y, tests on year Y+1, then expands.
 
+    Args:
+        feat_df       : feature matrix with a 'target' column
+        min_train_yrs : minimum years of history before the first test window
+        model_factory : callable that returns a fresh unfitted sklearn-compatible model
+
     Returns:
         summary_df   : per-window MAE and directional accuracy
-        pred_df      : date-indexed predicted vs actual returns
-        model        : the final fitted XGBRegressor (trained on the last window)
+        pred_df      : date-indexed predicted vs actual returns (all windows combined)
+        model        : the final fitted model (trained on the last window)
         feature_cols : list of feature column names
     """
     feature_cols = [c for c in feat_df.columns if c != "target"]
@@ -35,7 +40,7 @@ def walk_forward(
         if len(train) < 120 or len(test) < 20:
             continue
 
-        model = XGBRegressor(**model_params)
+        model = model_factory()
         model.fit(train[feature_cols], train["target"])
 
         preds   = model.predict(test[feature_cols])

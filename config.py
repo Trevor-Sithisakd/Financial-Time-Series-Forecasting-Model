@@ -1,3 +1,5 @@
+MLFLOW_EXPERIMENT = "financial-forecasting"
+
 TICKERS       = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"]
 START_DATE    = "2018-01-01"
 END_DATE      = "2024-12-31"

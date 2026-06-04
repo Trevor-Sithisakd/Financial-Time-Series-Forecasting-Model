@@ -43,3 +43,14 @@ def print_feature_importance(all_importances: dict) -> None:
     print("  AVERAGE FEATURE IMPORTANCE (across tickers)")
     print(f"{'-'*50}")
     print(avg_imp.round(4).to_string())
+
+
+def print_quant_metrics(model_name: str, metrics: dict) -> None:
+    print(f"\n{'='*50}")
+    print(f"  QUANT METRICS — {model_name}")
+    print(f"{'='*50}")
+    print(f"  IC (Spearman)       : {metrics['ic']:+.4f}  (industry threshold ~0.05)")
+    print(f"  Rank IC             : {metrics['rank_ic']:+.4f}")
+    print(f"  Directional Acc.    : {metrics['directional_accuracy']:.3f}  (0.50 = random)")
+    print(f"  Top-Decile Return   : {metrics['top_decile_return']:+.4f}  ({metrics['top_decile_return']:+.2%} per 5d)")
+    print(f"  Top-Decile Sharpe   : {metrics['sharpe']:+.3f}  (>1.0 is good)")
