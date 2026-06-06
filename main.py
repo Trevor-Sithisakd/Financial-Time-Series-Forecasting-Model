@@ -13,10 +13,7 @@ from config import (
 from features import build_features, add_cross_sectional_features
 from validation import walk_forward
 from evaluation import compute_metrics
-from reporting import (
-    print_ticker_results, print_aggregate_summary,
-    print_feature_importance, print_quant_metrics,
-)
+from reporting import print_feature_importance, print_quant_metrics
 
 # ── Model selection ───────────────────────────────────────────────────────────
 # Swap this import to change which model runs.
@@ -31,9 +28,15 @@ MACRO_FILE  = os.path.join(CACHE_DIR, f"macro_{START_DATE}_{END_DATE}.csv")
 
 def load_prices() -> pd.DataFrame:
     if os.path.exists(PRICES_FILE):
-        print(f"Loading cached prices from {PRICES_FILE}...")
-        return pd.read_csv(PRICES_FILE, header=[0, 1], index_col=0, parse_dates=True)
-    print(f"Downloading OHLCV data for {TICKERS} ({START_DATE} to {END_DATE})...")
+        raw = pd.read_csv(PRICES_FILE, header=[0, 1], index_col=0, parse_dates=True)
+        cached_tickers = set(raw.columns.get_level_values(1).unique())
+        missing = [t for t in TICKERS if t not in cached_tickers]
+        if not missing:
+            print(f"Loading cached prices from {PRICES_FILE}...")
+            return raw
+        print(f"Cache missing {len(missing)} tickers {missing} — re-downloading all...")
+
+    print(f"Downloading OHLCV data for {len(TICKERS)} tickers ({START_DATE} to {END_DATE})...")
     raw = yf.download(TICKERS, start=START_DATE, end=END_DATE, auto_adjust=True, progress=False)
     os.makedirs(CACHE_DIR, exist_ok=True)
     raw.to_csv(PRICES_FILE)
@@ -190,48 +193,52 @@ def main():
         print(f"\n  Cross-sectional features added. "
               f"Final feature count: {all_feat_dfs[TICKERS[0]].shape[1]} columns\n")
 
-        # ── Phase 3: walk-forward validation ──────────────────────────────────
-        all_results     = []
-        all_importances = {}
-        all_preds       = []
+        # ── Phase 3: stack all tickers and run ONE cross-sectional model ─────────
+        # Each row is one ticker-date pair. The model trains on all companies
+        # simultaneously, learning generalisable patterns rather than per-ticker noise.
+        stacked = pd.concat([
+            df.assign(ticker=ticker)
+            for ticker, df in all_feat_dfs.items()
+        ]).sort_index()
 
-        for ticker in TICKERS:
-            feat_df = all_feat_dfs[ticker]
+        print(f"  Stacked dataset: {stacked.shape[0]:,} rows x {stacked.shape[1]} columns "
+              f"({len(all_feat_dfs)} tickers x ~{stacked.shape[0] // len(all_feat_dfs)} rows each)\n")
 
-            results, pred_df, model, feature_cols = walk_forward(
-                feat_df, MIN_TRAIN_YRS, active_model.build
-            )
+        results, pred_df, model, feature_cols = walk_forward(
+            stacked, MIN_TRAIN_YRS, active_model.build
+        )
 
-            if results.empty:
-                print(f"\n  {ticker}: not enough data for walk-forward validation.")
-                continue
-
-            results["ticker"] = ticker
-            pred_df["ticker"] = ticker
-            all_results.append(results)
-            all_preds.append(pred_df)
-
-            importances = getattr(model, "feature_importances_", None)
-            if importances is not None:
-                all_importances[ticker] = pd.Series(
-                    importances, index=feature_cols
-                ).sort_values(ascending=False)
-
-            print_ticker_results(ticker, feat_df.shape, results, pred_df)
-
-        if not all_results:
+        if results.empty:
             print("\nNo results — check data availability.")
             return
 
-        combined       = pd.concat(all_results, ignore_index=True)
-        combined_preds = pd.concat(all_preds, ignore_index=True)
+        # Walk-forward summary per year (now covers all tickers combined)
+        print("Walk-forward results (all tickers combined):")
+        print(results[["test_year", "n_train", "n_test", "mae", "directional_accuracy"]]
+              .to_string(index=False))
 
-        print_aggregate_summary(combined)
+        # Feature importances
+        importances = getattr(model, "feature_importances_", None)
+        if importances is not None:
+            print_feature_importance({"cross_sectional": pd.Series(
+                importances, index=feature_cols
+            ).sort_values(ascending=False)})
 
-        if all_importances:
-            print_feature_importance(all_importances)
+        # Per-ticker IC summary from the single model's predictions
+        print(f"\n{'-'*50}")
+        print("  PER-TICKER METRICS (single cross-sectional model)")
+        print(f"{'-'*50}")
+        for ticker in TICKERS:
+            t_preds = pred_df[pred_df["ticker"] == ticker] if "ticker" in pred_df.columns else pd.DataFrame()
+            if t_preds.empty:
+                continue
+            tm = compute_metrics(t_preds, FORWARD_DAYS)
+            print(f"  {ticker:<8}  IC: {tm['ic']:+.4f}  "
+                  f"Sharpe: {tm['sharpe']:+.3f}  "
+                  f"Dir Acc: {tm['directional_accuracy']:.3f}")
 
-        metrics = compute_metrics(combined_preds, FORWARD_DAYS)
+        # Aggregate quant metrics across all tickers
+        metrics = compute_metrics(pred_df, FORWARD_DAYS)
         print_quant_metrics(active_model.MODEL_NAME, metrics)
 
         mlflow.log_metrics({
@@ -240,16 +247,16 @@ def main():
             "directional_accuracy": metrics["directional_accuracy"],
             "top_decile_return"   : metrics["top_decile_return"],
             "sharpe"              : metrics["sharpe"],
-            "mean_mae"            : combined["mae"].mean(),
+            "mean_mae"            : results["mae"].mean(),
         })
 
         for ticker in TICKERS:
-            ticker_preds = combined_preds[combined_preds["ticker"] == ticker]
-            if ticker_preds.empty:
+            t_preds = pred_df[pred_df["ticker"] == ticker] if "ticker" in pred_df.columns else pd.DataFrame()
+            if t_preds.empty:
                 continue
-            t_metrics = compute_metrics(ticker_preds, FORWARD_DAYS)
-            mlflow.log_metrics({f"{ticker}_ic"    : t_metrics["ic"],
-                                 f"{ticker}_sharpe": t_metrics["sharpe"]})
+            tm = compute_metrics(t_preds, FORWARD_DAYS)
+            mlflow.log_metrics({f"{ticker}_ic"    : tm["ic"],
+                                 f"{ticker}_sharpe": tm["sharpe"]})
 
         print("\nDone.")
         print(f"MLflow run logged under experiment: '{MLFLOW_EXPERIMENT}'")
