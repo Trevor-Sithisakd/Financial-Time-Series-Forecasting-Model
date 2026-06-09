@@ -44,7 +44,7 @@ def load_prices() -> pd.DataFrame:
     return raw
 
 
-def load_spy() -> pd.Series:
+def load_spy() -> pd.Series:    
     if os.path.exists(SPY_FILE):
         series = pd.read_csv(SPY_FILE, index_col=0, parse_dates=True)
         return series.iloc[:, 0].sort_index()
@@ -53,7 +53,7 @@ def load_spy() -> pd.Series:
     close = spy_raw["Close"]
     if isinstance(close, pd.DataFrame):
         close = close.iloc[:, 0]
-    close = close.rename("SPY").sort_index()
+    close = close.rename("SPY").sort_index() # rename is just for clarity's sake
     os.makedirs(CACHE_DIR, exist_ok=True)
     close.to_csv(SPY_FILE, header=True)
     return close
