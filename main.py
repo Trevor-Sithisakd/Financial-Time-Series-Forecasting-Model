@@ -47,7 +47,7 @@ def load_prices() -> pd.DataFrame:
 def load_spy() -> pd.Series:
     if os.path.exists(SPY_FILE):
         series = pd.read_csv(SPY_FILE, index_col=0, parse_dates=True)
-        return series.iloc[:, 0].rename("SPY").sort_index()
+        return series.iloc[:, 0].sort_index()
     print("Downloading SPY benchmark data...")
     spy_raw = yf.download("SPY", start=START_DATE, end=END_DATE, auto_adjust=True, progress=False)
     close = spy_raw["Close"]
