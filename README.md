@@ -2,6 +2,18 @@
 
 XGBoost and linear regression pipeline for predicting 5-day forward returns on large-cap US equities using OHLCV technical features and earnings event flags.
 
+## Dashboard
+
+Two-page Streamlit app for model comparison and per-ticker inspection. The app only reads pre-generated CSVs — no training or inference happens at app runtime.
+
+```bash
+pip install streamlit plotly
+python export_dashboard_data.py   # walk-forward eval for all 4 models -> dashboard_data/
+streamlit run app.py
+```
+
+`export_dashboard_data.py` is resumable: completed models are skipped on re-run (delete `dashboard_data/` to regenerate from scratch). Set `DASH_OFFLINE=1` to skip all yfinance calls (earnings features default to 0, market caps fall back to a static snapshot).
+
 ## Results
 
 | Row | Model | Features | Target | IC | Rank IC | Dir. Acc | Top-Decile Return | Sharpe |

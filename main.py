@@ -18,7 +18,7 @@ from reporting import print_feature_importance, print_quant_metrics
 # ── Model selection ───────────────────────────────────────────────────────────
 # Swap this import to change which model runs.
 # Options: models.linear_baseline | models.xgboost_model
-import models.xgboost_model as active_model
+import models.lightgbm_model as active_model
 
 CACHE_DIR   = "./cache"
 PRICES_FILE = os.path.join(CACHE_DIR, f"prices_{START_DATE}_{END_DATE}.csv")
