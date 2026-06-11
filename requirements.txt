@@ -1,0 +1,12 @@
+pandas
+numpy
+yfinance
+scikit-learn
+xgboost
+lightgbm
+mlflow
+scipy
+streamlit
+plotly
+beautifulsoup4
+sec-edgar-downloader
