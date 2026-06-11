@@ -1,8 +1,8 @@
 transcripts_raw/
 transcripts_clean/
 cache/
-dashboard_data/
 __pycache__/
 mlruns/
 mlartifacts/
 mlflow.db
+course.html
