@@ -1,0 +1,101 @@
+ticker,company_name,market_cap,source
+AAPL,Apple,3400000000000.0,static_snapshot
+NVDA,NVIDIA,3300000000000.0,static_snapshot
+MSFT,Microsoft,3300000000000.0,static_snapshot
+AMZN,Amazon,2300000000000.0,static_snapshot
+GOOGL,Alphabet,2100000000000.0,static_snapshot
+META,Meta Platforms,1500000000000.0,static_snapshot
+TSLA,Tesla,1000000000000.0,static_snapshot
+AVGO,Broadcom,1100000000000.0,static_snapshot
+BRK-B,Berkshire Hathaway,1000000000000.0,static_snapshot
+JPM,JPMorgan Chase,700000000000.0,static_snapshot
+LLY,Eli Lilly,800000000000.0,static_snapshot
+V,Visa,600000000000.0,static_snapshot
+XOM,Exxon Mobil,480000000000.0,static_snapshot
+MA,Mastercard,520000000000.0,static_snapshot
+COST,Costco,400000000000.0,static_snapshot
+UNH,UnitedHealth,450000000000.0,static_snapshot
+NFLX,Netflix,400000000000.0,static_snapshot
+HD,Home Depot,380000000000.0,static_snapshot
+WMT,Walmart,700000000000.0,static_snapshot
+PG,Procter & Gamble,400000000000.0,static_snapshot
+JNJ,Johnson & Johnson,380000000000.0,static_snapshot
+BAC,Bank of America,320000000000.0,static_snapshot
+CRM,Salesforce,280000000000.0,static_snapshot
+AMD,AMD,260000000000.0,static_snapshot
+ORCL,Oracle,450000000000.0,static_snapshot
+CVX,Chevron,270000000000.0,static_snapshot
+MRK,Merck,250000000000.0,static_snapshot
+ABBV,AbbVie,320000000000.0,static_snapshot
+KO,Coca-Cola,290000000000.0,static_snapshot
+WFC,Wells Fargo,240000000000.0,static_snapshot
+CSCO,Cisco,240000000000.0,static_snapshot
+ACN,Accenture,200000000000.0,static_snapshot
+NOW,ServiceNow,200000000000.0,static_snapshot
+IBM,IBM,250000000000.0,static_snapshot
+MS,Morgan Stanley,210000000000.0,static_snapshot
+GS,Goldman Sachs,180000000000.0,static_snapshot
+PM,Philip Morris,250000000000.0,static_snapshot
+PEP,PepsiCo,230000000000.0,static_snapshot
+DIS,Disney,200000000000.0,static_snapshot
+TMO,Thermo Fisher,200000000000.0,static_snapshot
+INTU,Intuit,190000000000.0,static_snapshot
+TXN,Texas Instruments,170000000000.0,static_snapshot
+ISRG,Intuitive Surgical,190000000000.0,static_snapshot
+AXP,American Express,210000000000.0,static_snapshot
+AMGN,Amgen,160000000000.0,static_snapshot
+GE,GE Aerospace,240000000000.0,static_snapshot
+UBER,Uber,180000000000.0,static_snapshot
+BKNG,Booking Holdings,170000000000.0,static_snapshot
+QCOM,Qualcomm,170000000000.0,static_snapshot
+RTX,RTX,180000000000.0,static_snapshot
+CAT,Caterpillar,170000000000.0,static_snapshot
+SPGI,S&P Global,160000000000.0,static_snapshot
+BLK,BlackRock,150000000000.0,static_snapshot
+LOW,Lowe's,130000000000.0,static_snapshot
+HON,Honeywell,140000000000.0,static_snapshot
+PFE,Pfizer,140000000000.0,static_snapshot
+DE,Deere,140000000000.0,static_snapshot
+UNP,Union Pacific,140000000000.0,static_snapshot
+NEE,NextEra Energy,150000000000.0,static_snapshot
+BSX,Boston Scientific,150000000000.0,static_snapshot
+AMAT,Applied Materials,140000000000.0,static_snapshot
+SYK,Stryker,140000000000.0,static_snapshot
+MU,Micron,130000000000.0,static_snapshot
+ADI,Analog Devices,110000000000.0,static_snapshot
+PANW,Palo Alto Networks,130000000000.0,static_snapshot
+ADP,ADP,120000000000.0,static_snapshot
+REGN,Regeneron,60000000000.0,static_snapshot
+GILD,Gilead,140000000000.0,static_snapshot
+ETN,Eaton,130000000000.0,static_snapshot
+LRCX,Lam Research,120000000000.0,static_snapshot
+MMC,Marsh McLennan,110000000000.0,static_snapshot
+BA,Boeing,130000000000.0,static_snapshot
+VRTX,Vertex Pharma,110000000000.0,static_snapshot
+CB,Chubb,110000000000.0,static_snapshot
+SO,Southern Co,100000000000.0,static_snapshot
+MCD,McDonald's,210000000000.0,static_snapshot
+KLAC,KLA,120000000000.0,static_snapshot
+CME,CME Group,100000000000.0,static_snapshot
+CEG,Constellation Energy,90000000000.0,static_snapshot
+BMY,Bristol Myers Squibb,110000000000.0,static_snapshot
+CI,Cigna,90000000000.0,static_snapshot
+PLD,Prologis,100000000000.0,static_snapshot
+SNPS,Synopsys,80000000000.0,static_snapshot
+CDNS,Cadence,80000000000.0,static_snapshot
+MCO,Moody's,90000000000.0,static_snapshot
+ICE,Intercontinental Exchange,100000000000.0,static_snapshot
+WM,Waste Management,90000000000.0,static_snapshot
+EOG,EOG Resources,70000000000.0,static_snapshot
+CTAS,Cintas,80000000000.0,static_snapshot
+ZTS,Zoetis,70000000000.0,static_snapshot
+TJX,TJX,140000000000.0,static_snapshot
+AON,Aon,80000000000.0,static_snapshot
+APH,Amphenol,110000000000.0,static_snapshot
+MSI,Motorola Solutions,70000000000.0,static_snapshot
+MDLZ,Mondelez,90000000000.0,static_snapshot
+PH,Parker Hannifin,90000000000.0,static_snapshot
+NSC,Norfolk Southern,60000000000.0,static_snapshot
+COF,Capital One,80000000000.0,static_snapshot
+WELL,Welltower,90000000000.0,static_snapshot
+ITW,Illinois Tool Works,80000000000.0,static_snapshot
