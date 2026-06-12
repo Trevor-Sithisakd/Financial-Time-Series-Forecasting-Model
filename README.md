@@ -27,6 +27,8 @@ streamlit run app.py
 | **7** | **Linear Regression (Ridge), per-ticker** | **+ Macro (VIX, yields) + Cross-sectional ranks** | **Excess vs SPY** | **+0.005** | **+0.005** | **0.502** | **+0.55%** | **0.759** |
 | 8 | XGBoost, stacked cross-sectional | + Macro + Cross-sectional ranks | Excess vs SPY | -0.006 | -0.006 | 0.495 | +0.21% | 0.32 |
 | 9 | Linear Regression (Ridge), stacked cross-sectional | + Macro + Cross-sectional ranks | Excess vs SPY | +0.006 | +0.006 | 0.502 | +0.18% | 0.28 |
+| 10 | Random Forest, stacked cross-sectional | + Macro + Cross-sectional ranks | Excess vs SPY | -0.009 | -0.009 | 0.502 | +0.12% | 0.208 |
+| 11 | LightGBM, stacked cross-sectional | + Macro + Cross-sectional ranks | Excess vs SPY | -0.005 | -0.005 | 0.495 | +0.21% | 0.335 |
 
 **Thresholds:** IC > 0.05 and Sharpe > 1.0 indicate a meaningful signal.
 
@@ -39,6 +41,8 @@ streamlit run app.py
 **Rows 3→5 and 4→6 (Adding earnings surprise):** Only 12 quarters of yfinance surprise data available vs 7-year window. Marginal IC improvement, Sharpe unchanged. *Feature fires too rarely to shift aggregate metrics — needs full point-in-time historical data.*
 
 **Row 5→7 (Adding macro + cross-sectional features): IC crossed zero for the first time (+0.005).** Sharpe improved from 0.50 → 0.759, top-decile return from +0.32% → +0.55%. VIX gives the model regime awareness (momentum signals behave differently in fear vs calm markets). Yield curve slope captures macro headwinds for growth stocks. Cross-sectional momentum and RSI ranks let the model identify which stock is strongest *relative to peers*, not just in absolute terms. *IC still below 0.05 threshold — direction of travel is positive, more data and full earnings surprise history are the next lever.*
+
+**Rows 9→10→11 (Random Forest and LightGBM, stacked cross-sectional):** Both tree ensemble methods underperform Ridge on this task. Random Forest has the worst IC of any model (-0.009) — it averages many deep trees which amplifies overfitting on weak-signal data. LightGBM performs closest to XGBoost (-0.005) with the highest top-decile return (+0.21%) and Sharpe (0.335) of the tree models, but still trails Ridge. *On low-signal financial data with ~140k rows and 36 features, L2-regularised linear regression remains the best generaliser.*
 
 **Rows 7→8→9 (Per-ticker vs stacked cross-sectional model):** Restructured to train one model on all 100 tickers simultaneously (~140k rows vs ~1.4k per ticker). IC improved marginally for Ridge (+0.005 → +0.006) but Sharpe dropped sharply (0.759 → 0.278). XGBoost degraded again (-0.006). *The stacked model improves IC (ranking accuracy across companies) but hurts Sharpe because the top decile is now selected from 100 tickers simultaneously — a harder selection problem. Per-ticker models are more specialised and produce better risk-adjusted returns at this signal strength. Row 7 remains the best result.*
 
