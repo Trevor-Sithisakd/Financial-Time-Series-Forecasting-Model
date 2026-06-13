@@ -96,6 +96,7 @@ Ridge regression consistently outperforms XGBoost on the excess return target. T
 - Obtain full historical point-in-time earnings estimates (Alpha Vantage, Finnhub, or Compustat)
 - Add sector/market relative features — cross-sectional model across all tickers simultaneously
 - More breadth in the models extend to 500 tickers
+- Add regime conditional models
 - Consider macro features: VIX level, SPY 5-day return, yield curve slope
 - Target: IC > 0.05, Sharpe > 1.0
 
