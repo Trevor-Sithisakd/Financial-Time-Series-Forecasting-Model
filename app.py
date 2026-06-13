@@ -154,9 +154,10 @@ with st.sidebar:
 
 def page_universe():
     st.title("Model Evaluation — 5-Day Excess Return Forecasting")
+    n_universe = len(data["market_caps"])
     st.caption(
         "Walk-forward (expanding window, 5-day embargo) evaluation of four models "
-        "predicting 5-day forward returns **in excess of SPY** for 100 large-cap US equities. "
+        f"predicting 5-day forward returns **in excess of SPY** for {n_universe} large-cap US equities. "
         "Engineered features: momentum, realised vol, RSI, MACD, Bollinger position, "
         "ATR-normalised returns, volume, macro regime (VIX, yield curve), cross-sectional ranks."
     )

@@ -59,7 +59,10 @@ except ImportError:
     import types
     sys.modules["mlflow"] = types.ModuleType("mlflow")
 
-from main import load_prices, load_spy, load_macro_data, fetch_earnings_dates, fetch_earnings_surprise
+from main import (
+    load_prices, load_spy, load_macro_data,
+    fetch_earnings_dates, fetch_earnings_surprise, available_tickers,
+)
 
 import models.linear_baseline as m_lin
 import models.xgboost_model as m_xgb
@@ -123,8 +126,10 @@ def build_stacked_features() -> pd.DataFrame:
     macro = load_macro_data(spy_close)
 
     feat_dfs = {}
-    for ticker in TICKERS:
+    for ticker in available_tickers(raw):
         prices = raw.xs(ticker, level=1, axis=1)[["Close", "High", "Low", "Volume"]].dropna()
+        if prices.empty:
+            continue
         if OFFLINE:
             earn_dates, earn_surp = pd.DatetimeIndex([]), pd.Series(dtype=float)
         else:
@@ -202,13 +207,32 @@ def latest_predictions(pred_df: pd.DataFrame, model_name: str) -> pd.DataFrame:
                  "predicted_return", "actual_return", "direction", "decile_rank"]]
 
 
+def _static_cap_row(t: str) -> dict:
+    """Offline fallback row for one ticker. Curated caps for the leaders;
+    everything else gets the symbol as its name and a small placeholder cap
+    so the full universe still appears in the dashboard."""
+    name, cap_b = STATIC_CAPS.get(t, (t, 10))  # 10 = ~$10B placeholder
+    return {"ticker": t, "company_name": name,
+            "market_cap": cap_b * 1e9, "source": "static_snapshot"}
+
+
 def fetch_market_caps() -> pd.DataFrame:
-    rows = []
+    if OFFLINE:
+        print("Market caps: static snapshot (DASH_OFFLINE=1)")
+        return pd.DataFrame([_static_cap_row(t) for t in TICKERS])
+
+    rows, failed = [], []
     try:
-        if OFFLINE:
-            raise RuntimeError("DASH_OFFLINE=1")
         import yfinance as yf
-        for t in TICKERS:
+    except Exception as e:
+        print(f"yfinance unavailable ({e}) — using static snapshot")
+        return pd.DataFrame([_static_cap_row(t) for t in TICKERS])
+
+    # Per-ticker resilience: a few invalid/delisted symbols shouldn't dump the
+    # whole universe to the static snapshot — fall back only for the ones that
+    # fail individually.
+    for t in TICKERS:
+        try:
             info = yf.Ticker(t).fast_info
             cap = info.get("market_cap") or info.get("marketCap")
             if not cap:
@@ -216,12 +240,12 @@ def fetch_market_caps() -> pd.DataFrame:
             name = STATIC_CAPS.get(t, (t, None))[0]
             rows.append({"ticker": t, "company_name": name,
                          "market_cap": float(cap), "source": "yfinance"})
-        print("Market caps: live from yfinance")
-    except Exception as e:
-        print(f"yfinance unavailable ({e}) — using static snapshot")
-        rows = [{"ticker": t, "company_name": v[0],
-                 "market_cap": v[1] * 1e9, "source": "static_snapshot"}
-                for t, v in STATIC_CAPS.items()]
+        except Exception:
+            failed.append(t)
+            rows.append(_static_cap_row(t))
+    print(f"Market caps: live from yfinance "
+          f"({len(TICKERS) - len(failed)}/{len(TICKERS)}; "
+          f"{len(failed)} fell back to static)")
     return pd.DataFrame(rows)
 
 

@@ -22,8 +22,18 @@ import models.lightgbm_model as active_model
 
 CACHE_DIR   = "./cache"
 PRICES_FILE = os.path.join(CACHE_DIR, f"prices_{START_DATE}_{END_DATE}.csv")
+REQUESTED_FILE = os.path.join(CACHE_DIR, f"requested_{START_DATE}_{END_DATE}.txt")
 SPY_FILE    = os.path.join(CACHE_DIR, f"spy_{START_DATE}_{END_DATE}.csv")
 MACRO_FILE  = os.path.join(CACHE_DIR, f"macro_{START_DATE}_{END_DATE}.csv")
+
+
+def available_tickers(raw: pd.DataFrame) -> list:
+    """Tickers actually present in a downloaded/cached price frame."""
+    if isinstance(raw.columns, pd.MultiIndex):
+        present = set(raw.columns.get_level_values(1).unique())
+    else:
+        present = set(TICKERS)  # single-ticker download has flat columns
+    return [t for t in TICKERS if t in present]
 
 
 def load_prices() -> pd.DataFrame:
@@ -31,16 +41,30 @@ def load_prices() -> pd.DataFrame:
         raw = pd.read_csv(PRICES_FILE, header=[0, 1], index_col=0, parse_dates=True)
         cached_tickers = set(raw.columns.get_level_values(1).unique())
         missing = [t for t in TICKERS if t not in cached_tickers]
-        if not missing:
-            print(f"Loading cached prices from {PRICES_FILE}...")
+        # Some S&P 500 symbols may be invalid/delisted and never come back from
+        # yfinance. We record the requested universe in a sidecar so those
+        # symbols don't force a full re-download on every run: if the universe
+        # we ask for is unchanged, the cache is treated as complete.
+        prev_requested = set()
+        if os.path.exists(REQUESTED_FILE):
+            with open(REQUESTED_FILE) as f:
+                prev_requested = {ln.strip() for ln in f if ln.strip()}
+        if not missing or prev_requested == set(TICKERS):
+            print(f"Loading cached prices from {PRICES_FILE} "
+                  f"({len(cached_tickers)} tickers available"
+                  + (f", {len(missing)} requested symbols had no data" if missing else "")
+                  + ")...")
             return raw
-        print(f"Cache missing {len(missing)} tickers {missing} — re-downloading all...")
+        print(f"Cache missing {len(missing)} tickers — re-downloading all...")
 
     print(f"Downloading OHLCV data for {len(TICKERS)} tickers ({START_DATE} to {END_DATE})...")
     raw = yf.download(TICKERS, start=START_DATE, end=END_DATE, auto_adjust=True, progress=False)
     os.makedirs(CACHE_DIR, exist_ok=True)
     raw.to_csv(PRICES_FILE)
-    print(f"Cached to {PRICES_FILE}")
+    with open(REQUESTED_FILE, "w") as f:
+        f.write("\n".join(TICKERS))
+    got = available_tickers(raw)
+    print(f"Cached to {PRICES_FILE} — {len(got)}/{len(TICKERS)} tickers returned data")
     return raw
 
 
@@ -167,13 +191,22 @@ def main():
         spy_close  = load_spy()
         macro_data = load_macro_data(spy_close)
 
+        # Only iterate tickers that actually came back from yfinance — at 500
+        # names some symbols may be invalid/delisted and simply have no data.
+        tickers = available_tickers(raw)
+        skipped = [t for t in TICKERS if t not in set(tickers)]
+        if skipped:
+            print(f"Skipping {len(skipped)} tickers with no price data: {skipped}")
+
         # ── Phase 1: build base features for every ticker ─────────────────────
         all_feat_dfs     = {}
         all_earn_dates   = {}
         all_earn_surp    = {}
 
-        for ticker in TICKERS:
+        for ticker in tickers:
             prices            = raw.xs(ticker, level=1, axis=1)[["Close", "High", "Low", "Volume"]].dropna()
+            if prices.empty:
+                continue
             earn_dates        = fetch_earnings_dates(ticker)
             earn_surp         = fetch_earnings_surprise(ticker)
             all_earn_dates[ticker] = earn_dates
