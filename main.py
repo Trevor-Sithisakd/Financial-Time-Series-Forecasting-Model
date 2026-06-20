@@ -14,11 +14,13 @@ from features import build_features, add_cross_sectional_features
 from validation import walk_forward
 from evaluation import compute_metrics
 from reporting import print_feature_importance, print_quant_metrics
+from tune import run_study
 
 # ── Model selection ───────────────────────────────────────────────────────────
 # Swap this import to change which model runs.
 # Options: models.linear_baseline | models.xgboost_model
 import models.lightgbm_model as active_model
+
 
 CACHE_DIR   = "./cache"
 PRICES_FILE = os.path.join(CACHE_DIR, f"prices_{START_DATE}_{END_DATE}.csv")
@@ -236,9 +238,11 @@ def main():
 
         print(f"  Stacked dataset: {stacked.shape[0]:,} rows x {stacked.shape[1]} columns "
               f"({len(all_feat_dfs)} tickers x ~{stacked.shape[0] // len(all_feat_dfs)} rows each)\n")
+        
+        best_params = run_study(active_model, stacked, n_trials=50)
 
         results, pred_df, model, feature_cols = walk_forward(
-            stacked, MIN_TRAIN_YRS, active_model.build
+            stacked, MIN_TRAIN_YRS, lambda: active_model.build_from_params(best_params),
         )
 
         if results.empty:
