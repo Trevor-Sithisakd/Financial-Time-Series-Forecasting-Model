@@ -168,7 +168,6 @@ def page_universe():
     lb = pd.DataFrame({
         "Model": [model_label(m) for m in mm["model_name"]],
         "IC": mm["ic"].map("{:+.4f}".format),
-        "Rank IC": mm["rank_ic"].map("{:+.4f}".format),
         "Sharpe (top-decile long)": mm["sharpe"].map("{:+.2f}".format),
         "Directional accuracy": mm["directional_accuracy"].map("{:.1%}".format),
         "Top-decile mean return": mm["top_decile_return"].map("{:+.2%}".format),

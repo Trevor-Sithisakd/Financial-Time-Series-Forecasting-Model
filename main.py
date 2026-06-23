@@ -15,6 +15,7 @@ from validation import walk_forward
 from evaluation import compute_metrics
 from reporting import print_feature_importance, print_quant_metrics
 from tune import run_study
+import models.linear_baseline as linear_baseline
 
 # ── Model selection ───────────────────────────────────────────────────────────
 # Swap this import to change which model runs.
@@ -31,10 +32,7 @@ MACRO_FILE  = os.path.join(CACHE_DIR, f"macro_{START_DATE}_{END_DATE}.csv")
 
 def available_tickers(raw: pd.DataFrame) -> list:
     """Tickers actually present in a downloaded/cached price frame."""
-    if isinstance(raw.columns, pd.MultiIndex):
-        present = set(raw.columns.get_level_values(1).unique())
-    else:
-        present = set(TICKERS)  # single-ticker download has flat columns
+    present = set(raw.columns.get_level_values(1).unique())
     return [t for t in TICKERS if t in present]
 
 
@@ -261,7 +259,19 @@ def main():
                 importances, index=feature_cols
             ).sort_values(ascending=False)})
 
-        # Per-ticker IC summary from the single model's predictions
+        # Aggregate quant metrics across all tickers
+        metrics = compute_metrics(pred_df, FORWARD_DAYS)
+        print_quant_metrics(active_model.MODEL_NAME, metrics)
+
+        mlflow.log_metrics({
+            "ic"                  : metrics["ic"],
+            "directional_accuracy": metrics["directional_accuracy"],
+            "top_decile_return"   : metrics["top_decile_return"],
+            "sharpe"              : metrics["sharpe"],
+            "mean_mae"            : results["mae"].mean(),
+        })
+
+        # Per-ticker IC summary — print and log in one pass
         print(f"\n{'-'*50}")
         print("  PER-TICKER METRICS (single cross-sectional model)")
         print(f"{'-'*50}")
@@ -273,27 +283,23 @@ def main():
             print(f"  {ticker:<8}  IC: {tm['ic']:+.4f}  "
                   f"Sharpe: {tm['sharpe']:+.3f}  "
                   f"Dir Acc: {tm['directional_accuracy']:.3f}")
-
-        # Aggregate quant metrics across all tickers
-        metrics = compute_metrics(pred_df, FORWARD_DAYS)
-        print_quant_metrics(active_model.MODEL_NAME, metrics)
-
-        mlflow.log_metrics({
-            "ic"                  : metrics["ic"],
-            "rank_ic"             : metrics["rank_ic"],
-            "directional_accuracy": metrics["directional_accuracy"],
-            "top_decile_return"   : metrics["top_decile_return"],
-            "sharpe"              : metrics["sharpe"],
-            "mean_mae"            : results["mae"].mean(),
-        })
-
-        for ticker in TICKERS:
-            t_preds = pred_df[pred_df["ticker"] == ticker] if "ticker" in pred_df.columns else pd.DataFrame()
-            if t_preds.empty:
-                continue
-            tm = compute_metrics(t_preds, FORWARD_DAYS)
             mlflow.log_metrics({f"{ticker}_ic"    : tm["ic"],
                                  f"{ticker}_sharpe": tm["sharpe"]})
+
+        # ── Ridge baseline ────────────────────────────────────────────────────
+        print(f"\n{'='*50}")
+        print("  RIDGE BASELINE (linear, cross-sectional)")
+        print(f"{'='*50}")
+        _, ridge_pred_df, _, _ = walk_forward(
+            stacked, MIN_TRAIN_YRS, linear_baseline.build,
+        )
+        if not ridge_pred_df.empty:
+            ridge_metrics = compute_metrics(ridge_pred_df, FORWARD_DAYS)
+            print_quant_metrics(linear_baseline.MODEL_NAME, ridge_metrics)
+            mlflow.log_metrics({
+                "ridge_ic"    : ridge_metrics["ic"],
+                "ridge_sharpe": ridge_metrics["sharpe"],
+            })
 
         print("\nDone.")
         print(f"MLflow run logged under experiment: '{MLFLOW_EXPERIMENT}'")

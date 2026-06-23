@@ -56,10 +56,9 @@ def walk_forward(
         })
 
         pred_row = {
-            "date"             : test.index,
-            "predicted_return" : preds,
-            "actual_return"    : actuals,
-            "direction_correct": np.sign(preds) == np.sign(actuals),
+            "date"            : test.index,
+            "predicted_return": preds,
+            "actual_return"   : actuals,
         }
         if "ticker" in test.columns:
             pred_row["ticker"] = test["ticker"].values

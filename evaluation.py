@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 from scipy import stats
 
 
@@ -8,13 +7,6 @@ def information_coefficient(predicted: np.ndarray, actual: np.ndarray) -> float:
     corr, _ = stats.spearmanr(predicted, actual)
     return float(corr)
 
-
-def rank_ic(predicted: np.ndarray, actual: np.ndarray) -> float:
-    """IC computed explicitly on integer ranks."""
-    pred_ranks  = pd.Series(predicted).rank().values
-    actual_ranks = pd.Series(actual).rank().values
-    corr, _ = stats.spearmanr(pred_ranks, actual_ranks)
-    return float(corr)
 
 
 def directional_accuracy(predicted: np.ndarray, actual: np.ndarray) -> float:
@@ -49,7 +41,6 @@ def compute_metrics(pred_df: pd.DataFrame, forward_days: int) -> dict:
     actual    = pred_df["actual_return"].values
     return {
         "ic"                  : information_coefficient(predicted, actual),
-        "rank_ic"             : rank_ic(predicted, actual),
         "directional_accuracy": directional_accuracy(predicted, actual),
         "top_decile_return"   : top_decile_mean_return(predicted, actual),
         "sharpe"              : top_decile_sharpe(predicted, actual, forward_days),
