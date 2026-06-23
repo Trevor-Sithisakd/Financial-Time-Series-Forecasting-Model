@@ -1,6 +1,7 @@
 import pandas as pd
 
-
+# used for old per ticker testing
+'''
 def print_ticker_results(
     ticker: str,
     feat_shape: tuple,
@@ -22,7 +23,7 @@ def print_ticker_results(
     sample["actual_return"]    = sample["actual_return"].map("{:+.2%}".format)
     print(sample.to_string())
 
-
+# old per ticker model testing code
 def print_aggregate_summary(combined: pd.DataFrame) -> None:
     print(f"\n{'='*50}")
     print("  AGGREGATE RESULTS (all tickers, all years)")
@@ -33,7 +34,7 @@ def print_aggregate_summary(combined: pd.DataFrame) -> None:
     print("\n  Per-ticker averages:")
     by_ticker = combined.groupby("ticker")[["mae", "directional_accuracy"]].mean()
     print(by_ticker.round(4).to_string())
-
+'''
 
 def print_feature_importance(all_importances: dict) -> None:
     avg_imp = (pd.concat(all_importances.values(), axis=1)
@@ -50,7 +51,6 @@ def print_quant_metrics(model_name: str, metrics: dict) -> None:
     print(f"  QUANT METRICS — {model_name}")
     print(f"{'='*50}")
     print(f"  IC (Spearman)       : {metrics['ic']:+.4f}  (industry threshold ~0.05)")
-    print(f"  Rank IC             : {metrics['rank_ic']:+.4f}")
     print(f"  Directional Acc.    : {metrics['directional_accuracy']:.3f}  (0.50 = random)")
     print(f"  Top-Decile Return   : {metrics['top_decile_return']:+.4f}  ({metrics['top_decile_return']:+.2%} per 5d)")
     print(f"  Top-Decile Sharpe   : {metrics['sharpe']:+.3f}  (>1.0 is good)")
