@@ -1,2 +1,0 @@
-ic,rank_ic,directional_accuracy,top_decile_return,sharpe,model_name,n_obs
-0.006860756068973677,0.006860756068973677,0.5021455744357088,0.0019129729774237459,0.2900784548866156,Ridge (linear baseline),98575

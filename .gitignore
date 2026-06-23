@@ -6,3 +6,4 @@ mlruns/
 mlartifacts/
 mlflow.db
 course.html
+dashboard_data/_*
