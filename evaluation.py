@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import stats
-
+import pandas as pd
 
 def information_coefficient(predicted: np.ndarray, actual: np.ndarray) -> float:
     """Spearman rank correlation between predicted and realised returns."""

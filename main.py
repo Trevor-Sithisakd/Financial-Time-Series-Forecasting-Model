@@ -15,12 +15,11 @@ from validation import walk_forward
 from evaluation import compute_metrics
 from reporting import print_feature_importance, print_quant_metrics
 from tune import run_study
-import models.linear_baseline as linear_baseline
 
 # ── Model selection ───────────────────────────────────────────────────────────
 # Swap this import to change which model runs.
 # Options: models.linear_baseline | models.xgboost_model
-import models.lightgbm_model as active_model
+import models.xgboost_model as active_model
 
 
 CACHE_DIR   = "./cache"
@@ -285,21 +284,6 @@ def main():
                   f"Dir Acc: {tm['directional_accuracy']:.3f}")
             mlflow.log_metrics({f"{ticker}_ic"    : tm["ic"],
                                  f"{ticker}_sharpe": tm["sharpe"]})
-
-        # ── Ridge baseline ────────────────────────────────────────────────────
-        print(f"\n{'='*50}")
-        print("  RIDGE BASELINE (linear, cross-sectional)")
-        print(f"{'='*50}")
-        _, ridge_pred_df, _, _ = walk_forward(
-            stacked, MIN_TRAIN_YRS, linear_baseline.build,
-        )
-        if not ridge_pred_df.empty:
-            ridge_metrics = compute_metrics(ridge_pred_df, FORWARD_DAYS)
-            print_quant_metrics(linear_baseline.MODEL_NAME, ridge_metrics)
-            mlflow.log_metrics({
-                "ridge_ic"    : ridge_metrics["ic"],
-                "ridge_sharpe": ridge_metrics["sharpe"],
-            })
 
         print("\nDone.")
         print(f"MLflow run logged under experiment: '{MLFLOW_EXPERIMENT}'")
