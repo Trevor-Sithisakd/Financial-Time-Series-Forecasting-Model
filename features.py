@@ -151,7 +151,6 @@ def build_features(
         macro = macro_data.reindex(prices.index, method="ffill").shift(1)
         for col in macro.columns:
             feat[col] = macro[col]
-
     # Earnings features
     feat["earnings_surprise"] = 0.0
     feat["earnings_event"]    = 0
