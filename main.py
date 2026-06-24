@@ -28,7 +28,6 @@ REQUESTED_FILE = os.path.join(CACHE_DIR, f"requested_{START_DATE}_{END_DATE}.txt
 SPY_FILE    = os.path.join(CACHE_DIR, f"spy_{START_DATE}_{END_DATE}.csv")
 MACRO_FILE  = os.path.join(CACHE_DIR, f"macro_{START_DATE}_{END_DATE}.csv")
 
-
 def available_tickers(raw: pd.DataFrame) -> list:
     """Tickers actually present in a downloaded/cached price frame."""
     present = set(raw.columns.get_level_values(1).unique())
@@ -171,6 +170,8 @@ def fetch_earnings_surprise(ticker: str) -> pd.Series:
         return pd.Series(dtype=float, name="earnings_surprise")
 
 
+
+
 def main():
     mlflow.set_experiment(MLFLOW_EXPERIMENT)
 
@@ -218,7 +219,7 @@ def main():
                 macro_data=macro_data,
             )
             all_feat_dfs[ticker] = feat_df
-            print(f"  {ticker}: {feat_df.shape[0]} rows x {feat_df.shape[1]} columns (pre cross-sectional)")
+            #print(f"  {ticker}: {feat_df.shape[0]} rows x {feat_df.shape[1]} columns (pre cross-sectional)")
 
         # ── Phase 2: add cross-sectional ranks across all tickers ─────────────
         all_feat_dfs = add_cross_sectional_features(all_feat_dfs)
@@ -246,10 +247,20 @@ def main():
             print("\nNo results — check data availability.")
             return
 
-        # Walk-forward summary per year (now covers all tickers combined)
-        print("Walk-forward results (all tickers combined):")
-        print(results[["test_year", "n_train", "n_test", "mae", "directional_accuracy"]]
-              .to_string(index=False))
+        # Per-ticker IC summary — print and log in one pass
+        print(f"\n{'-'*50}")
+        print("  PER-TICKER METRICS (single cross-sectional model)")
+        print(f"{'-'*50}")
+        for ticker in TICKERS:
+            t_preds = pred_df[pred_df["ticker"] == ticker] if "ticker" in pred_df.columns else pd.DataFrame()
+            if t_preds.empty:
+                continue
+            tm = compute_metrics(t_preds, FORWARD_DAYS)
+            print(f"  {ticker:<8}  IC: {tm['ic']:+.4f}  "
+                  f"Sharpe: {tm['sharpe']:+.3f}  "
+                  f"Dir Acc: {tm['directional_accuracy']:.3f}")
+            mlflow.log_metrics({f"{ticker}_ic"    : tm["ic"],
+                                 f"{ticker}_sharpe": tm["sharpe"]})
 
         # Feature importances
         importances = getattr(model, "feature_importances_", None)
@@ -270,25 +281,14 @@ def main():
             "mean_mae"            : results["mae"].mean(),
         })
 
-        # Per-ticker IC summary — print and log in one pass
-        print(f"\n{'-'*50}")
-        print("  PER-TICKER METRICS (single cross-sectional model)")
-        print(f"{'-'*50}")
-        for ticker in TICKERS:
-            t_preds = pred_df[pred_df["ticker"] == ticker] if "ticker" in pred_df.columns else pd.DataFrame()
-            if t_preds.empty:
-                continue
-            tm = compute_metrics(t_preds, FORWARD_DAYS)
-            print(f"  {ticker:<8}  IC: {tm['ic']:+.4f}  "
-                  f"Sharpe: {tm['sharpe']:+.3f}  "
-                  f"Dir Acc: {tm['directional_accuracy']:.3f}")
-            mlflow.log_metrics({f"{ticker}_ic"    : tm["ic"],
-                                 f"{ticker}_sharpe": tm["sharpe"]})
-
         print("\nDone.")
         print(f"MLflow run logged under experiment: '{MLFLOW_EXPERIMENT}'")
         print("View results: mlflow ui")
 
+        # Walk-forward summary per year (now covers all tickers combined)
+        print("Walk-forward results (all tickers combined):")
+        print(results[["test_year", "n_train", "n_test", "mae", "directional_accuracy"]]
+              .to_string(index=False))
 
 if __name__ == "__main__":
     main()
