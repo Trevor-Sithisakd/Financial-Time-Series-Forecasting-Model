@@ -41,7 +41,7 @@ def print_feature_importance(all_importances: dict) -> None:
                .mean(axis=1)
                .sort_values(ascending=False))
     print(f"\n{'-'*50}")
-    print("  AVERAGE FEATURE IMPORTANCE (across tickers)")
+    print("  FEATURE IMPORTANCE (cross-sectional model)")
     print(f"{'-'*50}")
     print(avg_imp.round(4).to_string())
 
