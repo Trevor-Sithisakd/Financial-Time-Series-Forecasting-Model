@@ -19,7 +19,7 @@ from tune import run_study
 # ── Model selection ───────────────────────────────────────────────────────────
 # Swap this import to change which model runs.
 # Options: models.linear_baseline | models.xgboost_model
-import models.xgboost_model as active_model
+import models.lightgbm_model as active_model
 
 
 CACHE_DIR   = "./cache"
@@ -141,33 +141,30 @@ def load_macro_data(spy_close: pd.Series) -> pd.DataFrame:
     return macro.sort_index()
 
 
-def fetch_earnings_dates(ticker: str) -> pd.DatetimeIndex:
-    try:
-        ed_raw = yf.Ticker(ticker).earnings_dates
-        idx    = ed_raw.index
-        return pd.DatetimeIndex(idx.tz_localize(None) if idx.tz is not None else idx)
-    except Exception:
-        return pd.DatetimeIndex([])
-
-
-def fetch_earnings_surprise(ticker: str) -> pd.Series:
+def fetch_earnings_data(ticker: str) -> tuple[pd.DatetimeIndex, pd.Series]:
+    """Single API call returning (earnings_dates, earnings_surprise) for a ticker."""
+    empty = (pd.DatetimeIndex([]), pd.Series(dtype=float, name="earnings_surprise"))
     try:
         ed = yf.Ticker(ticker).earnings_dates
         if ed is None or ed.empty:
-            return pd.Series(dtype=float, name="earnings_surprise")
-        if "EPS Estimate" not in ed.columns or "Reported EPS" not in ed.columns:
-            return pd.Series(dtype=float, name="earnings_surprise")
-        ed = ed.dropna(subset=["EPS Estimate", "Reported EPS"])
-        if ed.empty:
-            return pd.Series(dtype=float, name="earnings_surprise")
-        surprise = (ed["Reported EPS"] - ed["EPS Estimate"]) / ed["EPS Estimate"].abs()
+            return empty
         idx = ed.index
         if hasattr(idx, "tz") and idx.tz is not None:
             idx = idx.tz_localize(None)
-        surprise.index = idx
-        return surprise.sort_index().rename("earnings_surprise")
+        dates = pd.DatetimeIndex(idx)
+        if "EPS Estimate" not in ed.columns or "Reported EPS" not in ed.columns:
+            return dates, empty[1]
+        ed_clean = ed.dropna(subset=["EPS Estimate", "Reported EPS"])
+        if ed_clean.empty:
+            return dates, empty[1]
+        surprise = (ed_clean["Reported EPS"] - ed_clean["EPS Estimate"]) / ed_clean["EPS Estimate"].abs()
+        s_idx = ed_clean.index
+        if hasattr(s_idx, "tz") and s_idx.tz is not None:
+            s_idx = s_idx.tz_localize(None)
+        surprise.index = s_idx
+        return dates, surprise.sort_index().rename("earnings_surprise")
     except Exception:
-        return pd.Series(dtype=float, name="earnings_surprise")
+        return empty
 
 
 
@@ -178,13 +175,12 @@ def main():
     with mlflow.start_run(run_name=f"{active_model.MODEL_NAME} + macro + cross-sectional"):
         mlflow.log_params({
             "model"         : active_model.MODEL_NAME,
-            "tickers"       : ",".join(TICKERS),
+            "n_tickers"     : len(TICKERS),
             "start_date"    : START_DATE,
             "end_date"      : END_DATE,
             "forward_days"  : FORWARD_DAYS,
             "min_train_yrs" : MIN_TRAIN_YRS,
             "target"        : "excess_return_over_SPY",
-            "new_features"  : "macro(vix,yields,spy_momentum),cross_sectional_ranks,peer_excess_ret",
         })
 
         raw        = load_prices()
@@ -199,18 +195,13 @@ def main():
             print(f"Skipping {len(skipped)} tickers with no price data: {skipped}")
 
         # ── Phase 1: build base features for every ticker ─────────────────────
-        all_feat_dfs     = {}
-        all_earn_dates   = {}
-        all_earn_surp    = {}
+        all_feat_dfs = {}
 
         for ticker in tickers:
-            prices            = raw.xs(ticker, level=1, axis=1)[["Close", "High", "Low", "Volume"]].dropna()
+            prices = raw.xs(ticker, level=1, axis=1)[["Close", "High", "Low", "Volume"]].dropna()
             if prices.empty:
                 continue
-            earn_dates        = fetch_earnings_dates(ticker)
-            earn_surp         = fetch_earnings_surprise(ticker)
-            all_earn_dates[ticker] = earn_dates
-            all_earn_surp[ticker]  = earn_surp
+            earn_dates, earn_surp = fetch_earnings_data(ticker)
 
             feat_df = build_features(
                 prices, earn_dates, FORWARD_DAYS,
@@ -219,12 +210,12 @@ def main():
                 macro_data=macro_data,
             )
             all_feat_dfs[ticker] = feat_df
-            #print(f"  {ticker}: {feat_df.shape[0]} rows x {feat_df.shape[1]} columns (pre cross-sectional)")
 
         # ── Phase 2: add cross-sectional ranks across all tickers ─────────────
         all_feat_dfs = add_cross_sectional_features(all_feat_dfs)
+        first_df = next(iter(all_feat_dfs.values()))
         print(f"\n  Cross-sectional features added. "
-              f"Final feature count: {all_feat_dfs[TICKERS[0]].shape[1]} columns\n")
+              f"Final feature count: {first_df.shape[1]} columns\n")
 
         # ── Phase 3: stack all tickers and run ONE cross-sectional model ─────────
         # Each row is one ticker-date pair. The model trains on all companies
@@ -265,9 +256,13 @@ def main():
         # Feature importances
         importances = getattr(model, "feature_importances_", None)
         if importances is not None:
-            print_feature_importance({"cross_sectional": pd.Series(
-                importances, index=feature_cols
-            ).sort_values(ascending=False)})
+            if importances.sum() == 0:
+                print("\nWARNING: model made zero splits — all predictions are the training mean. "
+                      "Delete tuned_params/ and re-run to retune.")
+            else:
+                print_feature_importance({"cross_sectional": pd.Series(
+                    importances, index=feature_cols
+                ).sort_values(ascending=False)})
 
         # Aggregate quant metrics across all tickers
         metrics = compute_metrics(pred_df, FORWARD_DAYS)
